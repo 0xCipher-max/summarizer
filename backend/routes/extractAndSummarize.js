@@ -1,3 +1,4 @@
+// backend/routes/extractAndSummarize.js
 const express = require("express");
 const pdf = require("pdf-parse");
 const Tesseract = require("tesseract.js");
@@ -5,8 +6,8 @@ const formidable = require("formidable");
 const fs = require("fs");
 const axios = require("axios");
 const router = express.Router();
+require("dotenv").config();
 
-const HUGGING_FACE_API_KEY = process.env.HUGGING_FACE_API_KEY;
 
 // Function to summarize text using Hugging Face API
 const summarizeText = async (text) => {
@@ -16,34 +17,23 @@ const summarizeText = async (text) => {
       { inputs: text },
       {
         headers: {
-          Authorization: `Bearer ${HUGGING_FACE_API_KEY}`,
+          Authorization: `Bearer ${process.env.HUGGING_FACE_API_KEY}`, // Use your API key
         },
       }
     );
+    console.log("API Response:", response.data); // Log the response
     return response.data[0].summary_text;
   } catch (error) {
-    console.error("Error summarizing text:", error);
+    console.error(
+      "Error summarizing text:",
+      error.response ? error.response.data : error.message
+    );
     throw new Error("Failed to summarize text.");
   }
 };
 
-// Extract text from a PDF file
-const extractTextFromPDF = async (filePath) => {
-  const dataBuffer = fs.readFileSync(filePath);
-  const pdfData = await pdf(dataBuffer);
-  return pdfData.text;
-};
-
-// Extract text from an image file
-const extractTextFromImage = async (filePath) => {
-  const {
-    data: { text },
-  } = await Tesseract.recognize(filePath, "eng");
-  return text;
-};
-
 // Define the extract and summarize endpoint
-router.post("/", async (req, res) => {
+router.post("/", (req, res) => {
   const form = new formidable.IncomingForm();
 
   form.parse(req, async (err, fields, files) => {
@@ -53,28 +43,48 @@ router.post("/", async (req, res) => {
 
     let extractedText = "";
 
-    try {
-      if (files.pdf) {
-        extractedText = await extractTextFromPDF(files.pdf[0].filepath);
-        fs.unlinkSync(files.pdf[0].filepath); // Cleanup
-      } else if (files.image) {
-        extractedText = await extractTextFromImage(files.image[0].filepath);
-        fs.unlinkSync(files.image[0].filepath); // Cleanup
-      } else {
-        return res.status(400).json({ error: "No valid file uploaded." });
-      }
-
-      if (!extractedText.trim()) {
+    // Check if the uploaded file is a PDF
+    if (files.pdf) {
+      const pdfPath = files.pdf[0].filepath;
+      try {
+        const dataBuffer = fs.readFileSync(pdfPath);
+        const pdfData = await pdf(dataBuffer);
+        extractedText = pdfData.text;
+      } catch (error) {
         return res
-          .status(400)
-          .json({ error: "No text could be extracted from the file." });
+          .status(500)
+          .json({ error: "Failed to extract text from PDF." });
       }
+    }
 
+    // Check if the uploaded file is an image
+    if (files.image) {
+      const imagePath = files.image[0].filepath;
+      try {
+        const {
+          data: { text },
+        } = await Tesseract.recognize(imagePath, "eng");
+        extractedText = text;
+      } catch (error) {
+        return res
+          .status(500)
+          .json({ error: "Failed to extract text from image." });
+      }
+    }
+
+    // If no text was extracted, return an error
+    if (!extractedText) {
+      return res
+        .status(400)
+        .json({ error: "No text extracted from the uploaded file." });
+    }
+
+    // Summarize the extracted text
+    try {
       const summary = await summarizeText(extractedText);
       res.json({ extractedText, summary });
     } catch (error) {
-      console.error("Error processing the request:", error);
-      res.status(500).json({ error: "An error occurred." });
+      return res.status(500).json({ error: error.message });
     }
   });
 });
