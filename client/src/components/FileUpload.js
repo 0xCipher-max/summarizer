@@ -1,53 +1,110 @@
-// src/components/FileUpload.js
 import React, { useState } from "react";
-import { Button, TextField, Typography, Box } from "@mui/material";
+import {
+  Button,
+  Typography,
+  Box,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Grid,
+  Tooltip,
+  CircularProgress,
+} from "@mui/material";
+import { useDropzone } from "react-dropzone";
 
 const FileUpload = ({ onFileUpload }) => {
   const [file, setFile] = useState(null);
+  const [summaryLength, setSummaryLength] = useState("medium");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleFileChange = (event) => {
-    const selectedFile = event.target.files[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-    }
-  };
+  const { getRootProps, getInputProps } = useDropzone({
+    accept: ".pdf, .png, .jpg, .jpeg",
+    onDrop: (acceptedFiles) => {
+      setFile(acceptedFiles[0]);
+    },
+  });
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (file) {
-      onFileUpload(file);
+      setIsLoading(true);
+      await onFileUpload(file, summaryLength);
+      setIsLoading(false);
     }
   };
 
   return (
-    <Box sx={{ mt: 4, textAlign: "center" }}>
-      <Typography variant="h6">Upload a PDF or Image File</Typography>
-      <input
-        accept="application/pdf,image/*"
-        style={{ display: "none" }}
-        id="file-upload"
-        type="file"
-        onChange={handleFileChange}
-      />
-      <label htmlFor="file-upload">
-        <Button variant="contained" component="span">
-          Choose File
-        </Button>
-      </label>
-      {file && (
-        <Typography variant="body1" sx={{ mt: 2 }}>
-          Selected File: {file.name}
+    <Grid
+      container
+      spacing={2}
+      justifyContent="center"
+      alignItems="center"
+      style={{ marginTop: "20px" }}
+    >
+      {/* Header Section */}
+      <Grid item xs={12}>
+        <Typography variant="h6" align="center">
+          Upload a PDF or Image File
         </Typography>
-      )}
-      <Button
-        variant="contained"
-        color="primary"
-        onClick={handleUpload}
-        sx={{ mt: 2 }}
-        disabled={!file}
-      >
-        Upload
-      </Button>
-    </Box>
+      </Grid>
+
+      {/* Drag-and-Drop Area */}
+      <Grid item xs={12} sm={8} md={6}>
+        <Tooltip title="Drag & drop a file or click to select" placement="top">
+          <div
+            {...getRootProps()}
+            style={{
+              border: "2px dashed #000",
+              padding: "20px",
+              textAlign: "center",
+              borderRadius: "8px",
+              cursor: "pointer",
+              backgroundColor: "#f9f9f9",
+            }}
+          >
+            <input {...getInputProps()} />
+            <Typography variant="body1">
+              Drag & drop a file here, or click to select a file
+            </Typography>
+            {file && (
+              <Typography variant="body2" style={{ marginTop: "10px" }}>
+                Selected File: {file.name}
+              </Typography>
+            )}
+          </div>
+        </Tooltip>
+      </Grid>
+
+      {/* Summary Length Dropdown */}
+      <Grid item xs={12} sm={4} md={3}>
+        <FormControl variant="outlined" fullWidth>
+          <InputLabel id="summary-length-label">Summary Length</InputLabel>
+          <Select
+            labelId="summary-length-label"
+            value={summaryLength}
+            onChange={(e) => setSummaryLength(e.target.value)}
+            label="Summary Length"
+          >
+            <MenuItem value="short">Short</MenuItem>
+            <MenuItem value="medium">Medium</MenuItem>
+            <MenuItem value="long">Long</MenuItem>
+          </Select>
+        </FormControl>
+      </Grid>
+
+      {/* Upload Button */}
+      <Grid item xs={12}>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleUpload}
+          disabled={!file || isLoading}
+          fullWidth
+        >
+          {isLoading ? <CircularProgress size={24} /> : "Upload"}
+        </Button>
+      </Grid>
+    </Grid>
   );
 };
 
